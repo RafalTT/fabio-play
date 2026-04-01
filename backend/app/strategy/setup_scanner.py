@@ -69,7 +69,7 @@ class TradeSetup:
             self.risk_reward >= min_rr and
             self.risk_points > 0 and
             self.reward_points > 0 and
-            self.confidence >= 0.3
+            self.confidence >= 0.25
         )
 
 
@@ -131,6 +131,7 @@ def scan_for_setups(
     return _no_setup(data.index[-1])
 
 
+
 # ── Setup 1: Trend Continuation ────────────────────────────────────────────
 
 def _scan_trend_continuation(
@@ -176,8 +177,8 @@ def _scan_trend_continuation(
     lvn_midpoint = None
     for lo, hi in lvn_zones:
         mid = (lo + hi) / 2
-        # Price should be near the LVN (within 1.0 ATR)
-        if abs(current_price - mid) < state.atr * 1.0:
+        # Price should be near the LVN (within 2.0 ATR)
+        if abs(current_price - mid) < state.atr * 2.0:
             nearest_lvn = (lo, hi)
             lvn_midpoint = mid
             break
@@ -201,10 +202,6 @@ def _scan_trend_continuation(
         (direction == "up" and cvd_dir == "up") or
         (direction == "down" and cvd_dir == "down")
     )
-
-    # Require at least CVD confirmation if no direct aggression print
-    if not has_aggression and not cvd_confirms:
-        return None
 
     # Compute entry, stop, target
     if direction == "up":
@@ -338,9 +335,6 @@ def _scan_mean_reversion(
         entry = current_price
         stop_loss = recent_low - sl_buffer  # just below the failed low
         target = vp.poc
-
-    if not has_aggression and not cvd_confirms:
-        return None
 
     risk = abs(entry - stop_loss)
     reward = abs(target - entry)
