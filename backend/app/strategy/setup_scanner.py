@@ -165,8 +165,8 @@ def _scan_trend_continuation(
     lvn_midpoint = None
     for lo, hi in lvn_zones:
         mid = (lo + hi) / 2
-        # Price should be near the LVN (within 0.5 ATR)
-        if abs(current_price - mid) < state.atr * 0.5:
+        # Price should be near the LVN (within 1.0 ATR)
+        if abs(current_price - mid) < state.atr * 1.0:
             nearest_lvn = (lo, hi)
             lvn_midpoint = mid
             break

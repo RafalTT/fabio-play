@@ -241,16 +241,22 @@ def run_walk_forward(
 
 
 def _get_session(ts: pd.Timestamp, config: BacktestConfig) -> str:
-    """Determine which session the bar belongs to."""
-    hour = ts.hour
-    minute = ts.minute
-    time_minutes = hour * 60 + minute
+    """
+    Determine which session the bar belongs to.
+    Converts UTC timestamp to US/Eastern to handle DST correctly.
+    """
+    import pytz
+    et = pytz.timezone("America/New_York")
+    ts_et = ts.astimezone(et)
+    time_minutes = ts_et.hour * 60 + ts_et.minute
 
-    ny_start = config.ny_start_utc * 60 + 30
-    ny_end = config.ny_end_utc * 60
+    # NY session: 9:30 – 16:00 ET
+    ny_start = 9 * 60 + 30
+    ny_end = 16 * 60
 
-    london_start = config.london_start_utc * 60
-    london_end = config.london_end_utc * 60
+    # London session: 03:00 – 08:00 ET (08:00–13:00 UTC)
+    london_start = 3 * 60
+    london_end = 8 * 60
 
     if london_start <= time_minutes < london_end:
         return "london"

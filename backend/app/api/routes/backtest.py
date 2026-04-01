@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 
-from app.data.eodhd import fetch_intraday
+from app.data.alpha_vantage import fetch_intraday
 from app.backtest.engine import run_backtest, run_walk_forward, BacktestConfig
 from app.config import settings
 
@@ -9,8 +9,8 @@ router = APIRouter(prefix="/backtest", tags=["backtest"])
 
 
 class BacktestRequest(BaseModel):
-    symbol: str = "NQ.INDX"
-    interval: str = "5m"
+    symbol: str = "QQQ"
+    interval: str = "5min"
     from_dt: str
     to_dt: str
     account_size: float = 100_000.0

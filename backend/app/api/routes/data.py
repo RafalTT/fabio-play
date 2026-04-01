@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException, Query
 
-from app.data.eodhd import fetch_intraday, fetch_eod
+from app.data.alpha_vantage import fetch_intraday, fetch_daily as fetch_eod
 from app.strategy.volume_profile import build_volume_profile, build_session_profiles
 from app.strategy.market_state import classify_market_state
 from app.strategy.order_flow import compute_cvd, detect_aggression
@@ -10,12 +10,12 @@ router = APIRouter(prefix="/data", tags=["data"])
 
 @router.get("/ohlcv")
 async def get_ohlcv(
-    symbol: str = Query("NQ.INDX"),
-    interval: str = Query("5m"),
+    symbol: str = Query("QQQ"),
+    interval: str = Query("5min"),
     from_dt: str = Query(...),
     to_dt: str = Query(...),
 ):
-    """Fetch OHLCV data from EODHD."""
+    """Fetch OHLCV data from Alpha Vantage."""
     try:
         df = fetch_intraday(symbol=symbol, interval=interval, from_dt=from_dt, to_dt=to_dt)
     except Exception as e:
@@ -24,24 +24,26 @@ async def get_ohlcv(
     if df.empty:
         raise HTTPException(status_code=404, detail="No data found")
 
+    records = df.reset_index().rename(columns={"index": "time", df.index.name or "index": "time"})
+    records.iloc[:, 0] = records.iloc[:, 0].astype(str)
+
     return {
         "symbol": symbol,
         "interval": interval,
         "from": from_dt,
         "to": to_dt,
         "bars": len(df),
-        "data": df.reset_index().rename(columns={"datetime": "time"}).to_dict(orient="records"),
+        "data": records.to_dict(orient="records"),
     }
 
 
 @router.get("/volume-profile")
 async def get_volume_profile(
-    symbol: str = Query("NQ.INDX"),
-    interval: str = Query("5m"),
+    symbol: str = Query("QQQ"),
+    interval: str = Query("5min"),
     from_dt: str = Query(...),
     to_dt: str = Query(...),
     num_bins: int = Query(100),
-    session: str = Query("full"),
 ):
     """Compute volume profile for given period."""
     try:
@@ -72,8 +74,8 @@ async def get_volume_profile(
 
 @router.get("/market-state")
 async def get_market_state(
-    symbol: str = Query("NQ.INDX"),
-    interval: str = Query("5m"),
+    symbol: str = Query("QQQ"),
+    interval: str = Query("5min"),
     from_dt: str = Query(...),
     to_dt: str = Query(...),
 ):

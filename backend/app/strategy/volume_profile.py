@@ -197,14 +197,20 @@ def _compute_value_area(
 def _find_lvn_zones(
     prices: np.ndarray,
     volumes: np.ndarray,
-    threshold_pct: float = 0.30,
+    percentile: float = 35.0,
 ) -> list[tuple[float, float]]:
     """
-    Find Low Volume Nodes: contiguous bins below threshold_pct of mean volume.
-    These are key reaction zones in Fabio's strategy.
+    Find Low Volume Nodes: contiguous bins below the given volume percentile.
+    Using percentile (not fixed % of mean) ensures LVNs are always found
+    regardless of the volume distribution shape.
+
+    percentile: bins below this percentile of non-zero volumes = LVN
     """
-    mean_vol = volumes.mean()
-    threshold = mean_vol * threshold_pct
+    nonzero = volumes[volumes > 0]
+    if len(nonzero) == 0:
+        return []
+
+    threshold = float(np.percentile(nonzero, percentile))
 
     zones = []
     in_zone = False

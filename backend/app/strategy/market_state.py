@@ -39,19 +39,22 @@ def classify_market_state(
     df: pd.DataFrame,
     lookback_bars: int = 20,
     atr_period: int = 14,
-    displacement_threshold: float = 1.5,
-    range_contraction_threshold: float = 0.4,
+    displacement_threshold: float = 1.2,
+    efficiency_imbalance: float = 0.40,
+    efficiency_balance: float = 0.15,
 ) -> StateResult:
     """
     Classify current market state from recent OHLCV bars.
 
+    Uses Directional Efficiency = abs(net_move) / total_price_range
+    - Efficiency > 0.40 → IMBALANCE (price moves directionally)
+    - Efficiency < 0.15 → BALANCE (price rotates)
+    - Between → TRANSITION
+
+    Also checks displacement (net_move / ATR) as secondary confirmation.
+
     df: DataFrame with [open, high, low, close, volume] — recent bars
     lookback_bars: how many bars to analyze
-    atr_period: ATR calculation period
-    displacement_threshold: price move > X * ATR = imbalance
-    range_contraction_threshold: range < X * ATR = balance
-
-    Returns StateResult
     """
     if len(df) < max(lookback_bars, atr_period + 1):
         return StateResult(
@@ -72,43 +75,41 @@ def classify_market_state(
     range_low = recent["low"].min()
     price_range = range_high - range_low
 
-    # Displacement score: how far has price moved directionally
-    net_move = abs(recent["close"].iloc[-1] - recent["close"].iloc[0])
-    displacement_score = net_move / atr if atr > 0 else 0
+    net_move = recent["close"].iloc[-1] - recent["close"].iloc[0]
+    abs_net = abs(net_move)
 
-    # Range score: tight range = balance, wide range + direction = imbalance
-    range_ratio = price_range / atr if atr > 0 else 0
+    # Directional efficiency: how much of the total range is used directionally
+    efficiency = abs_net / price_range if price_range > 0 else 0
 
-    # Directional momentum (slope of closes)
+    # Displacement: net move in ATR units
+    displacement_score = abs_net / atr if atr > 0 else 0
+
+    # Slope of closes (sign for bias)
     closes = recent["close"].values
     x = np.arange(len(closes))
     slope = np.polyfit(x, closes, 1)[0]
     slope_norm = slope / atr if atr > 0 else 0
 
-    # Volume trend (increasing = imbalance signal)
-    vol_trend = _volume_trend(recent)
-
-    # --- Classification logic ---
     details = {
+        "efficiency": round(efficiency, 3),
         "displacement_score": round(displacement_score, 3),
-        "range_ratio": round(range_ratio, 3),
         "slope_norm": round(slope_norm, 3),
-        "vol_trend": round(vol_trend, 3),
+        "price_range": round(price_range, 4),
         "atr": round(atr, 4),
     }
 
-    if displacement_score > displacement_threshold and abs(slope_norm) > 0.15:
+    bias = "up" if net_move > 0 else "down" if net_move < 0 else "neutral"
+
+    if efficiency > efficiency_imbalance and displacement_score > displacement_threshold:
         state = MarketState.IMBALANCE
-        confidence = min(0.95, displacement_score / (displacement_threshold * 2))
-        bias = "up" if slope > 0 else "down"
-    elif range_ratio < range_contraction_threshold and abs(slope_norm) < 0.08:
+        confidence = min(0.95, efficiency * 1.5)
+    elif efficiency < efficiency_balance and displacement_score < displacement_threshold * 0.5:
         state = MarketState.BALANCE
-        confidence = min(0.90, 1 - range_ratio / range_contraction_threshold)
+        confidence = min(0.90, (efficiency_balance - efficiency) / efficiency_balance)
         bias = "neutral"
     else:
         state = MarketState.TRANSITION
         confidence = 0.5
-        bias = "up" if slope > 0 else "down" if slope < 0 else "neutral"
 
     return StateResult(
         state=state,
