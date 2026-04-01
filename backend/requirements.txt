@@ -11,3 +11,4 @@ pyarrow==17.0.0
 scipy==1.14.1
 python-dateutil==2.9.0
 pytz==2024.1
+aiofiles
