@@ -8,8 +8,6 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1.0.3
         with:
@@ -19,6 +17,9 @@ jobs:
           script: |
             cd ~/fabio-play
             git pull origin main
-            docker compose down
-            docker compose up -d --build
-            docker compose ps
+            cd backend
+            ~/.local/bin/uv pip install -r requirements.txt --quiet
+            cd ..
+            pm2 reload fabio-play-api --update-env
+            pm2 list | grep fabio
+            curl -s http://localhost:8000/health
