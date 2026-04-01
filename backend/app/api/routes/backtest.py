@@ -1,5 +1,7 @@
+import asyncio
 import json
 import logging
+from functools import partial
 from typing import AsyncGenerator
 
 from fastapi import APIRouter
@@ -51,7 +53,10 @@ async def _stream(req: BacktestRequest) -> AsyncGenerator[str, None]:
             pct = int((i / total_months) * 60)
             yield _event("progress", msg=f"Pobieranie danych: {month}", month=month, pct=pct, step=i+1, total=total_months)
 
-            df_month = _fetch_month(req.symbol, req.interval, month, use_cache=True)
+            loop = asyncio.get_event_loop()
+            df_month = await loop.run_in_executor(
+                None, partial(_fetch_month, req.symbol, req.interval, month, True)
+            )
             if df_month is not None and not df_month.empty:
                 frames.append(df_month)
 
@@ -89,7 +94,9 @@ async def _stream(req: BacktestRequest) -> AsyncGenerator[str, None]:
 
             yield _event("progress", msg=f"Walk-forward: ~{total_windows} okien po {req.window_months} mies.", pct=72)
 
-            results = run_walk_forward(df, config, window_months=req.window_months)
+            results = await loop.run_in_executor(
+                None, partial(run_walk_forward, df, config, req.window_months)
+            )
 
             yield _event("progress", msg=f"Obliczam metryki walk-forward...", pct=90)
 
@@ -108,7 +115,9 @@ async def _stream(req: BacktestRequest) -> AsyncGenerator[str, None]:
         else:
             yield _event("progress", msg="Skanuję setupy bar po barze...", pct=75)
 
-            result = run_backtest(df, config, req.from_dt, req.to_dt)
+            result = await loop.run_in_executor(
+                None, partial(run_backtest, df, config, req.from_dt, req.to_dt)
+            )
 
             yield _event("progress", msg=f"Gotowe! {result.metrics.total_trades} tradów znalezionych", pct=95)
 
