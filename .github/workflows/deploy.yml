@@ -15,12 +15,13 @@ jobs:
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
           script: |
+            set -e
             cd ~/fabio-play
             git fetch origin main
             git reset --hard origin/main
             cd backend
-            ~/.local/bin/uv pip install -r requirements.txt --quiet
+            ~/.local/bin/uv pip install -r requirements.txt --quiet 2>&1 || true
             cd ..
             pm2 reload fabio-play-api --update-env
-            pm2 list | grep fabio
-            curl -s http://localhost:8000/health
+            sleep 2
+            curl -sf http://localhost:8000/health
