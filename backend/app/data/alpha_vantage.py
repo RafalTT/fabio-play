@@ -25,7 +25,7 @@ AV_INTERVAL = Literal["1min", "5min", "15min", "30min", "60min"]
 
 def _cache_path(symbol: str, interval: str, month: str) -> Path:
     safe = symbol.replace(".", "_")
-    return settings.cache_path / f"av_{safe}_{interval}_{month}.parquet"
+    return settings.cache_path / f"av_{safe}_{interval}_{month}.pkl"
 
 
 def fetch_intraday(
@@ -90,7 +90,7 @@ def _fetch_month(
 
     if use_cache and cache_file.exists() and not is_current:
         logger.debug("AV cache hit: %s", cache_file.name)
-        return pd.read_parquet(cache_file)
+        return pd.read_pickle(cache_file)
 
     params = {
         "function": "TIME_SERIES_INTRADAY",
@@ -139,7 +139,7 @@ def _fetch_month(
     df = df.sort_index().astype(float)
 
     if use_cache and not is_current:
-        df.to_parquet(cache_file)
+        df.to_pickle(cache_file)
 
     return df
 
@@ -157,7 +157,7 @@ def fetch_daily(
     if not settings.alpha_vantage_api_key:
         raise ValueError("ALPHA_VANTAGE_API_KEY not set in .env")
 
-    cache_file = settings.cache_path / f"av_{symbol}_daily.parquet"
+    cache_file = settings.cache_path / f"av_{symbol}_daily.pkl"
     if use_cache and cache_file.exists():
         df = pd.read_parquet(cache_file)
     else:
@@ -185,7 +185,7 @@ def fetch_daily(
         })[["open", "high", "low", "close", "volume"]].astype(float)
 
         if use_cache:
-            df.to_parquet(cache_file)
+            df.to_pickle(cache_file)
 
     # Slice to range
     if from_dt:
