@@ -177,11 +177,26 @@ class TradeManager:
         t = self.trade
         t.exit_price = exit_price
         t.exit_time = ts
-        t.status = status
-        if t.direction == "long":
-            t.pnl = (exit_price - t.entry_price) * t.position_size
+
+        if t.partial_done:
+            # 50% exited at partial_target, remaining 50% exits now
+            if t.direction == "long":
+                partial_pnl = (t.partial_target - t.entry_price) * t.position_size * 0.5
+                remainder_pnl = (exit_price - t.entry_price) * t.position_size * 0.5
+            else:
+                partial_pnl = (t.entry_price - t.partial_target) * t.position_size * 0.5
+                remainder_pnl = (t.entry_price - exit_price) * t.position_size * 0.5
+            t.pnl = partial_pnl + remainder_pnl
+            # Partial TP done + stop at BE = small winner, not a loss
+            if status == TradeStatus.CLOSED_STOP:
+                status = TradeStatus.CLOSED_PARTIAL_BE
         else:
-            t.pnl = (t.entry_price - exit_price) * t.position_size
+            if t.direction == "long":
+                t.pnl = (exit_price - t.entry_price) * t.position_size
+            else:
+                t.pnl = (t.entry_price - exit_price) * t.position_size
+
+        t.status = status
         t.pnl_r = t.pnl / t.risk_amount if t.risk_amount > 0 else 0
 
     def _close_partial_remainder(self, exit_price: float, ts: pd.Timestamp):

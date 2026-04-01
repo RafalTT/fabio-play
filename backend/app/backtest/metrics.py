@@ -67,13 +67,18 @@ def compute_metrics(
     if closed.empty:
         return _empty_metrics(account_size)
 
-    wins = closed[closed["pnl_r"] > 0]
-    losses = closed[closed["pnl_r"] <= 0]
+    # Exclude EOD closes from win/loss stats (not real signal exits)
+    signal_exits = closed[closed["status"] != "closed_eod"]
+    eod_exits = closed[closed["status"] == "closed_eod"]
+
+    wins = signal_exits[signal_exits["pnl_r"] > 0]
+    losses = signal_exits[signal_exits["pnl_r"] <= 0]
 
     total = len(closed)
     n_wins = len(wins)
     n_losses = len(losses)
-    win_rate = n_wins / total if total > 0 else 0
+    signal_total = len(signal_exits)
+    win_rate = n_wins / signal_total if signal_total > 0 else 0
 
     avg_win_r = float(wins["pnl_r"].mean()) if n_wins > 0 else 0
     avg_loss_r = float(losses["pnl_r"].mean()) if n_losses > 0 else 0
