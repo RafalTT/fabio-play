@@ -49,6 +49,8 @@ class Trade:
     current_stop: float = field(init=False)
     be_activated: bool = False
     partial_done: bool = False
+    trailing_stop: float | None = None       # active after partial TP
+    trail_watermark: float = 0.0             # best price seen after partial TP
     pnl: float = 0.0
     pnl_r: float = 0.0  # P&L in R multiples
 
@@ -126,52 +128,75 @@ class TradeManager:
     def _update_long(self, high: float, low: float, close: float, ts: pd.Timestamp):
         t = self.trade
 
-        # 1. Check stop hit
-        if low <= t.current_stop:
-            self._close(t.current_stop, ts, TradeStatus.CLOSED_STOP)
-            return
+        if not t.partial_done:
+            # Phase 1: before partial TP — use initial stop
+            if low <= t.current_stop:
+                self._close(t.current_stop, ts, TradeStatus.CLOSED_STOP)
+                return
 
-        # 2. Partial TP at 1:2 (if not done)
-        if not t.partial_done and high >= t.partial_target:
-            t.partial_exit_price = t.partial_target
-            t.partial_exit_time = ts
-            t.partial_done = True
-            # Move stop to break-even
-            t.current_stop = t.entry_price
-            t.be_activated = True
+            if high >= t.partial_target:
+                t.partial_exit_price = t.partial_target
+                t.partial_exit_time = ts
+                t.partial_done = True
+                t.be_activated = True
+                # Start trailing stop at BE, watermark at partial target price
+                t.trailing_stop = t.entry_price
+                t.trail_watermark = high
 
-        # 3. Full target
-        if high >= t.target:
-            exit_price = t.target
-            if t.partial_done:
-                # Only 50% of position was still open
-                self._close_partial_remainder(exit_price, ts)
-            else:
-                self._close(exit_price, ts, TradeStatus.CLOSED_TARGET)
+            # Check full target hit on same bar as partial
+            if t.partial_done and high >= t.target:
+                self._close_partial_remainder(t.target, ts)
+                return
+
+        else:
+            # Phase 2: after partial TP — use trailing stop (1R trail)
+            if high > t.trail_watermark:
+                t.trail_watermark = high
+                new_trail = high - t.risk_points
+                t.trailing_stop = max(t.trailing_stop, new_trail)
+
+            if low <= t.trailing_stop:
+                self._close(t.trailing_stop, ts, TradeStatus.CLOSED_STOP)
+                return
+
+            if high >= t.target:
+                self._close_partial_remainder(t.target, ts)
 
     def _update_short(self, high: float, low: float, close: float, ts: pd.Timestamp):
         t = self.trade
 
-        # 1. Check stop hit
-        if high >= t.current_stop:
-            self._close(t.current_stop, ts, TradeStatus.CLOSED_STOP)
-            return
+        if not t.partial_done:
+            # Phase 1: before partial TP — use initial stop
+            if high >= t.current_stop:
+                self._close(t.current_stop, ts, TradeStatus.CLOSED_STOP)
+                return
 
-        # 2. Partial TP at 1:2
-        if not t.partial_done and low <= t.partial_target:
-            t.partial_exit_price = t.partial_target
-            t.partial_exit_time = ts
-            t.partial_done = True
-            t.current_stop = t.entry_price
-            t.be_activated = True
+            if low <= t.partial_target:
+                t.partial_exit_price = t.partial_target
+                t.partial_exit_time = ts
+                t.partial_done = True
+                t.be_activated = True
+                t.trailing_stop = t.entry_price
+                t.trail_watermark = low
 
-        # 3. Full target
-        if low <= t.target:
-            exit_price = t.target
-            if t.partial_done:
-                self._close_partial_remainder(exit_price, ts)
-            else:
-                self._close(exit_price, ts, TradeStatus.CLOSED_TARGET)
+            # Check full target hit on same bar as partial
+            if t.partial_done and low <= t.target:
+                self._close_partial_remainder(t.target, ts)
+                return
+
+        else:
+            # Phase 2: after partial TP — use trailing stop (1R trail)
+            if low < t.trail_watermark:
+                t.trail_watermark = low
+                new_trail = low + t.risk_points
+                t.trailing_stop = min(t.trailing_stop, new_trail)
+
+            if high >= t.trailing_stop:
+                self._close(t.trailing_stop, ts, TradeStatus.CLOSED_STOP)
+                return
+
+            if low <= t.target:
+                self._close_partial_remainder(t.target, ts)
 
     def _close(self, exit_price: float, ts: pd.Timestamp, status: TradeStatus):
         t = self.trade
