@@ -49,6 +49,16 @@
 
   .chart-wrap { position: relative; height: 220px; }
 
+  /* Progress */
+  .progress-wrap { padding: 24px; }
+  .progress-bar-bg { background: #0f1117; border-radius: 99px; height: 8px; overflow: hidden; margin-bottom: 12px; }
+  .progress-bar-fill { height: 100%; background: linear-gradient(90deg, #6366f1, #818cf8); border-radius: 99px; transition: width .4s ease; }
+  .progress-log { font-size: 12px; color: #64748b; display: flex; flex-direction: column; gap: 4px; max-height: 160px; overflow-y: auto; }
+  .progress-log .log-line { display: flex; gap: 8px; align-items: center; }
+  .progress-log .log-line.active { color: #e2e8f0; }
+  .progress-log .log-line.done { color: #22c55e; }
+  .progress-pct { font-size: 20px; font-weight: 700; color: #6366f1; margin-bottom: 4px; }
+
   table { width: 100%; border-collapse: collapse; font-size: 12px; }
   th { text-align: left; padding: 8px 10px; color: #64748b; font-weight: 500; text-transform: uppercase; letter-spacing: .05em; font-size: 11px; border-bottom: 1px solid #2d3148; }
   td { padding: 8px 10px; border-bottom: 1px solid #2d314820; }
@@ -141,17 +151,11 @@
 </div>
 
 <script>
-const API = '';  // same origin
-
+const API = '';
 let equityChart = null;
 
-async function runBacktest() {
-  const btn = document.getElementById('runBtn');
-  btn.disabled = true;
-  btn.classList.add('loading');
-  btn.textContent = 'Ładuję dane...';
-
-  const body = {
+function getParams() {
+  return {
     symbol: document.getElementById('symbol').value,
     interval: document.getElementById('interval').value,
     from_dt: document.getElementById('from_dt').value,
@@ -162,24 +166,82 @@ async function runBacktest() {
     max_daily_losses: parseInt(document.getElementById('max_daily_losses').value),
     walk_forward: document.getElementById('walk_forward').value === 'true',
   };
+}
+
+function showProgress(pct, msg, logLines) {
+  document.getElementById('results').innerHTML = `
+    <div class="panel">
+      <h2>Trwa backtest...</h2>
+      <div class="progress-wrap">
+        <div class="progress-pct">${pct}%</div>
+        <div class="progress-bar-bg"><div class="progress-bar-fill" style="width:${pct}%"></div></div>
+        <div class="progress-log">
+          ${logLines.map((l, i) => `
+            <div class="log-line ${i === logLines.length-1 ? 'active' : 'done'}">
+              <span>${i === logLines.length-1 ? '⏳' : '✓'}</span>
+              <span>${l}</span>
+            </div>`).join('')}
+        </div>
+      </div>
+    </div>`;
+}
+
+async function runBacktest() {
+  const btn = document.getElementById('runBtn');
+  btn.disabled = true;
+  btn.textContent = '⏳ Uruchamiam...';
+
+  const params = getParams();
+  const logLines = [];
+
+  showProgress(0, 'Łączenie z serwerem...', ['Łączenie z serwerem...']);
 
   try {
     const res = await fetch(`${API}/api/v1/backtest/run`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
+      body: JSON.stringify(params),
     });
 
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.detail || 'Błąd serwera');
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.detail || 'Błąd serwera');
+    }
 
-    renderResults(data, body);
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop(); // keep incomplete line
+
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;
+        let event;
+        try { event = JSON.parse(line.slice(6)); } catch { continue; }
+
+        if (event.type === 'progress' || event.type === 'start') {
+          logLines.push(event.msg);
+          if (logLines.length > 12) logLines.shift();
+          showProgress(event.pct ?? 0, event.msg, [...logLines]);
+        } else if (event.type === 'result') {
+          showProgress(98, 'Renderuję wyniki...', [...logLines, 'Renderuję wyniki...']);
+          setTimeout(() => renderResults(event.data, params), 100);
+        } else if (event.type === 'error') {
+          throw new Error(event.msg);
+        }
+      }
+    }
   } catch (e) {
     document.getElementById('results').innerHTML = `
       <div class="panel"><div class="error-box">❌ ${e.message}</div></div>`;
   } finally {
     btn.disabled = false;
-    btn.classList.remove('loading');
     btn.textContent = '▶ Uruchom Backtest';
   }
 }
