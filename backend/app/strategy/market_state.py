@@ -39,9 +39,9 @@ def classify_market_state(
     df: pd.DataFrame,
     lookback_bars: int = 20,
     atr_period: int = 14,
-    displacement_threshold: float = 1.2,
-    efficiency_imbalance: float = 0.40,
-    efficiency_balance: float = 0.15,
+    displacement_threshold: float = 0.8,
+    efficiency_imbalance: float = 0.28,
+    efficiency_balance: float = 0.25,
 ) -> StateResult:
     """
     Classify current market state from recent OHLCV bars.
@@ -125,8 +125,8 @@ def classify_market_state(
 
 def detect_balance_range(
     df: pd.DataFrame,
-    min_bars: int = 10,
-    max_range_atr_multiple: float = 2.0,
+    min_bars: int = 8,
+    max_range_atr_multiple: float = 3.0,
     atr_period: int = 14,
 ) -> tuple[float, float] | None:
     """
@@ -178,7 +178,7 @@ def detect_impulse_leg(
 
             # Check it's directional (not choppy)
             retracements = _count_direction_changes(segment["close"].values)
-            if score > best_score and score >= min_move_atr and retracements <= 2:
+            if score > best_score and score >= min_move_atr and retracements <= 3:
                 best_score = score
                 direction = "up" if net > 0 else "down"
                 best = {

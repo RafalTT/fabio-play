@@ -112,7 +112,18 @@ def scan_for_setups(
             sl_buffer_ticks, tick_size, atr_period,
         )
     else:
-        return _no_setup(data.index[-1])
+        # TRANSITION: try both setups at reduced confidence
+        setup = _scan_trend_continuation(
+            data, state_result, current_price, session,
+            sl_buffer_ticks, tick_size, atr_period,
+        )
+        if setup is None:
+            setup = _scan_mean_reversion(
+                data, state_result, current_price, session,
+                sl_buffer_ticks, tick_size, atr_period,
+            )
+        if setup is not None:
+            setup.confidence *= 0.7  # penalize transition state setups
 
     if setup and setup.is_valid(min_rr):
         return setup
@@ -139,7 +150,7 @@ def _scan_trend_continuation(
     4. Check order flow aggression in trend direction
     5. Compute entry/stop/target
     """
-    impulse = detect_impulse_leg(data, min_move_atr=1.5, atr_period=atr_period, lookback=30)
+    impulse = detect_impulse_leg(data, min_move_atr=1.0, atr_period=atr_period, lookback=40)
     if not impulse:
         return None
 
