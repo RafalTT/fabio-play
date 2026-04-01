@@ -19,6 +19,7 @@ jobs:
             cd ~/fabio-play
             git fetch origin main
             git reset --hard origin/main
+            mkdir -p backend/cache && chmod 777 backend/cache
             cd backend
             ~/.local/bin/uv pip install -r requirements.txt --quiet 2>&1 || true
             cd ..
