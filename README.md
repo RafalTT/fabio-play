@@ -19,10 +19,6 @@ uv venv --python 3.12
 source .venv/bin/activate
 uv pip install -r requirements.txt
 
-# Skopiuj plik z API keys (jesteś już w folderze backend/)
-cp .env.example .env
-# Uzupełnij ALPHA_VANTAGE_API_KEY w pliku .env
-
 # Uruchom serwer
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
@@ -45,13 +41,9 @@ Aplikacja dostępna pod: http://localhost:8000
 
 ## Zmienne środowiskowe
 
-Plik `.env` (na podstawie `.env.example`):
+Klucze API są skonfigurowane jako **Codespaces secrets** w ustawieniach repo — w Codespace są dostępne automatycznie jako zmienne środowiskowe, bez potrzeby tworzenia `.env`.
 
-```
-ALPHA_VANTAGE_API_KEY=twoj_klucz
-```
-
-Klucz API: https://www.alphavantage.co/support/#api-key (darmowy plan wystarczy)
+Do uruchomienia lokalnego skopiuj `backend/.env.example` → `backend/.env` i uzupełnij klucze.
 
 ## Stack
 
