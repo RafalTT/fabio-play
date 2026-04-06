@@ -139,8 +139,8 @@ class TradeManager:
                 t.partial_exit_time = ts
                 t.partial_done = True
                 t.be_activated = True
-                # Start trailing stop at BE, watermark at partial target price
-                t.trailing_stop = t.entry_price
+                # Trail starts 1R below partial_target → locks in +1R immediately
+                t.trailing_stop = t.partial_target - t.risk_points
                 t.trail_watermark = high
 
             # Check full target hit on same bar as partial
